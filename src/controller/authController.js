@@ -3,11 +3,18 @@ const ErrorHandler = require("../utils/errorHandler");
 const ApiResponse = require("../utils/ApiResponse");
 const User = require("../model/user");
 const jwt = require("jsonwebtoken");
-
+const cloudinary = require("cloudinary");
 
 const newToken = (user) => {
-    return jwt.sign({user}, `123`);
+    return jwt.sign({ user }, `123`);
 }
+
+cloudinary.config({
+    cloud_name: 'ddo1qhnvr',
+    api_key: '815397317157475',
+    api_secret: `-ksZRAuXviLR7zFqS-lntspGvvc`
+});
+
 
 const register = asyncHandler(async (req, res, next) => {
 
@@ -21,7 +28,7 @@ const register = asyncHandler(async (req, res, next) => {
     })
 
     if (existUser) {
-        return next(new ErrorHandler("User with email or username already exists",409));
+        return next(new ErrorHandler("User with email or username already exists", 409));
     }
 
     const user = await User.create({
@@ -34,7 +41,7 @@ const register = asyncHandler(async (req, res, next) => {
     const createdUser = await User.findById(user._id).select("-password");
 
     if (!createdUser) {
-        return next(new ErrorHandler("Something went wrong while registering the user",500));
+        return next(new ErrorHandler("Something went wrong while registering the user", 500));
     }
 
     return res.status(201).json(
@@ -68,8 +75,44 @@ const login = asyncHandler(async (req, res, next) => {
     delete user.password;
 
     return res.status(200).json(
-        new ApiResponse(200, {user, token}, "User login Successfully")
+        new ApiResponse(200, { user, token }, "User login Successfully")
     )
 });
 
-module.exports = { register, login }
+const updateProfile = asyncHandler(async (req, res, next) => {
+    const imageFile = req.file;
+
+    if (!imageFile) {
+        return next(new ErrorHandler("Please upload an image", 400));
+    }
+
+    const result = await uploadImage(imageFile);
+    // console.log("Uploaded image URL:", result.secure_url);
+    let user = await User.findOneAndUpdate(
+        { email: req.user.email }, // Filter criteria
+        { userProfile: result.secure_url }, // Update field and value
+        { new: true } // To return the updated document
+      );
+
+    return res.status(201).json(
+        new ApiResponse(200, user, "User upated Successfully")
+    )
+
+});
+
+
+const uploadImage = async (image) => {
+    try {
+        const buffer = image.buffer;
+        const base64Data = buffer.toString('base64');
+        const dataURI = "data:" + image.mimetype + ";base64," + base64Data;
+
+        const result = await cloudinary.v2.uploader.upload(dataURI);
+
+        return result;
+    } catch (err) {
+        throw err;
+    }
+}
+
+module.exports = { register, login, updateProfile }
